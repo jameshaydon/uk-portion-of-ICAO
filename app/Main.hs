@@ -4,6 +4,7 @@
 module Main where
 
 import Data.List
+import Data.Maybe
 
 data Plan p r
   = End p
@@ -39,6 +40,15 @@ reconcile (Leg p r rest) (p' : ps) | p == p' = do
   recoRest <- reconcile rest restAdexp
   pure (Leg p Via {route = r, through} recoRest)
 reconcile _ _ = []
+
+-- This version ignores the duplicate waypoint issue. But still works!
+reconcile' :: (Eq p) => ICAO p r -> [p] -> Maybe (Combined p r)
+reconcile' (End p) [p'] | p == p' = pure (End p)
+reconcile' (Leg p r rest) (p' : ps) | p == p' = do
+  let (skipped, restAdexp) = span (/= start rest) ps
+  recoRest <- reconcile' rest restAdexp
+  pure (Leg p Via {route = r, through = skipped} recoRest)
+reconcile' _ _ = Nothing
 
 -- Extract the UK part of the flight.
 ukSegment :: (p -> Bool) -> Combined p r -> Either Err (Combined p r)
@@ -84,6 +94,11 @@ ukPartOfICAO uk icao adexp = case reconcile icao adexp of
   [] -> Left CannotReconcileIcaoAdexp
   _ -> Left AmbiguousReconciliationsOfIcaoAdexp
 
+ukPartOfICAO' :: (Eq p) => (p -> Bool) -> ICAO p r -> [p] -> Either Err (ICAO p r)
+ukPartOfICAO' uk icao adexp = case reconcile' icao adexp of
+  Just plan -> projectICAO <$> ukSegment uk plan
+  _ -> Left CannotReconcileIcaoAdexp
+
 data Err
   = NonUkPlan
   | CannotReconcileIcaoAdexp
@@ -110,7 +125,7 @@ ADEXP: F   S  Q    C   T   A    O  E  X     P   W   B   Q   Y        U
                        UK  UK   UK UK UK    UK  UK
 -}
 example :: Either Err (ICAO String Integer)
-example = ukPartOfICAO inUK icao adexp
+example = ukPartOfICAO' inUK icao adexp
   where
     inUK = (`elem` ["T", "A", "O", "E", "X", "P", "W"])
     icao = ("F", 4) ~> ("Q", 2) ~> ("T", 8) ~> ("O", 5) ~> ("P", 1) ~> ("Y", 9) ~> End "U"
