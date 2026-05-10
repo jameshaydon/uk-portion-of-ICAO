@@ -1,0 +1,14 @@
+name = "formal"
+version = "0.1.0"
+defaultTargets = ["formal"]
+
+[[require]]
+name = "cslib"
+scope = "cs-lean"
+
+[[lean_lib]]
+name = "Formal"
+
+[[lean_exe]]
+name = "formal"
+root = "Main"
